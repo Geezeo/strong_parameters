@@ -1,24 +1,24 @@
 class ActionController::Parameters
   class Filter::Default < Filter
     protected
-      def apply_filters(params, filters)
+      def apply_filters
         filters.each do |filter|
           case filter
           when Symbol, String
-            permitted_scalar_filter(params, filter)
+            permitted_scalar_filter(filter)
           when Hash then
-            hash_filter(params, filter)
+            hash_filter(filter)
           end
         end
       end
 
-      def unpermitted_keys(params)
+      def unpermitted_keys
         input.keys - params.keys
       end
 
     private
 
-      def array_of_permitted_scalars_filter(params, key, hash = input)
+      def array_of_permitted_scalars_filter(key, hash = input)
         if hash.has_key?(key) && array_of_permitted_scalars?(hash[key])
           params[key] = hash[key]
         end
@@ -37,7 +37,7 @@ class ActionController::Parameters
         end
       end
 
-      def hash_filter(params, filter)
+      def hash_filter(filter)
         filter = filter.with_indifferent_access
 
         # Slicing filters out non-declared keys.
@@ -46,7 +46,7 @@ class ActionController::Parameters
 
           if filter[key] == []
             # Declaration {:comment_ids => []}.
-            array_of_permitted_scalars_filter(params, key)
+            array_of_permitted_scalars_filter(key)
           else
             # Declaration {:user => :name} or {:user => [:name, :age, {:adress => ...}]}.
             params[key] = each_element(value) do |element, index|
@@ -54,14 +54,14 @@ class ActionController::Parameters
                 element = input.class.new(element) unless element.respond_to?(:permit)
                 element.permit(*Array.wrap(filter[key]))
               elsif filter[key].is_a?(Hash) && filter[key][index] == []
-                array_of_permitted_scalars_filter(params, index, value)
+                array_of_permitted_scalars_filter(index, value)
               end
             end
           end
         end
       end
 
-      def permitted_scalar_filter(params, key)
+      def permitted_scalar_filter(key)
         if input.has_key?(key) && permitted_scalar?(input[key])
           params[key] = input[key]
         end

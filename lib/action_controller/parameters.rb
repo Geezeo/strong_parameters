@@ -99,7 +99,7 @@ module ActionController
       end
 
       def filter
-        @filter ||= Filter.for_parameters self
+        Filter.for_parameters self
       end
   end
 

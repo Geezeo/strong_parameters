@@ -1,6 +1,6 @@
 class ActionController::Parameters::Filter
   cattr_accessor :action_on_unpermitted_parameters, :parameter_filter
-  attr_reader :input
+  attr_reader :filters, :input, :params
 
   def self.configure(config)
     self.action_on_unpermitted_parameters = config.fetch(:action_on_unpermitted_parameters) do
@@ -21,12 +21,13 @@ class ActionController::Parameters::Filter
 
   def initialize(input)
     @input = input
+    @params = input.class.new
   end
 
   def permit(*filters)
-    params = input.class.new
-    apply_filters(params, filters)
-    unpermitted_parameters!(params)
+    @filters = filters
+    apply_filters
+    unpermitted_parameters!
     params.permit!
   end
 
@@ -71,18 +72,18 @@ class ActionController::Parameters::Filter
 
   private
 
-    def unpermitted_parameters!(params)
+    def unpermitted_parameters!
       return unless action_on_unpermitted_parameters
 
-      unpermitted_keys = unpermitted_keys(params) - NEVER_UNPERMITTED_PARAMS
+      keys = unpermitted_keys - NEVER_UNPERMITTED_PARAMS
 
-      if unpermitted_keys.any?
+      if keys.any?
         case action_on_unpermitted_parameters
         when :log
           name = "unpermitted_parameters.action_controller"
-          ActiveSupport::Notifications.instrument(name, :keys => unpermitted_keys)
+          ActiveSupport::Notifications.instrument(name, :keys => keys)
         when :raise
-          raise ActionController::UnpermittedParameters.new(unpermitted_keys)
+          raise ActionController::UnpermittedParameters.new(keys)
         end
       end
     end
