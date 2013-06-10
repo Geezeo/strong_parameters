@@ -9,9 +9,7 @@ module StrongParameters
     end
 
     initializer "strong_parameters.config", :before => "action_controller.set_configs" do |app|
-      ActionController::Parameters::Filter.action_on_unpermitted_parameters = app.config.action_controller.delete(:action_on_unpermitted_parameters) do
-        (Rails.env.test? || Rails.env.development?) ? :log : false
-      end
+      ActionController::Parameters::Filter.configure app.config.action_controller
     end
   end
 end

@@ -29,7 +29,9 @@ module ActionController
   end
 end
 
-ActionController::Parameters::Filter.action_on_unpermitted_parameters = false
+ActionController::Parameters::Filter.configure(
+  action_on_unpermitted_parameters: false
+)
 
 # Load support files
 Dir["#{File.dirname(__FILE__)}/support/**/*.rb"].each { |f| require f }
