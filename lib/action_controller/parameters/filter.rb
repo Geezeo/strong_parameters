@@ -1,6 +1,6 @@
 class ActionController::Parameters::Filter
   cattr_accessor :action_on_unpermitted_parameters, :parameter_filter
-  attr_reader :filters, :input, :params
+  attr_reader :filters, :input, :output
 
   def self.configure(config)
     self.action_on_unpermitted_parameters = config.fetch(:action_on_unpermitted_parameters) do
@@ -21,14 +21,14 @@ class ActionController::Parameters::Filter
 
   def initialize(input)
     @input = input
-    @params = input.class.new
+    @output = input.class.new
   end
 
   def permit(*filters)
     @filters = filters
     apply_filters
     unpermitted_parameters!
-    params.permit!
+    output.permit!
   end
 
   protected

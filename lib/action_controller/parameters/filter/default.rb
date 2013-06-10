@@ -13,14 +13,14 @@ class ActionController::Parameters
       end
 
       def unpermitted_keys
-        input.keys - params.keys
+        input.keys - output.keys
       end
 
     private
 
       def array_of_permitted_scalars_filter(key, hash = input)
         if hash.has_key?(key) && array_of_permitted_scalars?(hash[key])
-          params[key] = hash[key]
+          output[key] = hash[key]
         end
       end
 
@@ -49,7 +49,7 @@ class ActionController::Parameters
             array_of_permitted_scalars_filter(key)
           else
             # Declaration {:user => :name} or {:user => [:name, :age, {:adress => ...}]}.
-            params[key] = each_element(value) do |element, index|
+            output[key] = each_element(value) do |element, index|
               if element.is_a?(Hash)
                 element = input.class.new(element) unless element.respond_to?(:permit)
                 element.permit(*Array.wrap(filter[key]))
@@ -63,12 +63,12 @@ class ActionController::Parameters
 
       def permitted_scalar_filter(key)
         if input.has_key?(key) && permitted_scalar?(input[key])
-          params[key] = input[key]
+          output[key] = input[key]
         end
 
         input.keys.grep(/\A#{Regexp.escape(key.to_s)}\(\d+[if]?\)\z/).each do |key|
           if permitted_scalar?(input[key])
-            params[key] = input[key]
+            output[key] = input[key]
           end
         end
       end
