@@ -1,6 +1,42 @@
 class ActionController::Parameters
   class Filter::Default < Filter
     protected
+      def apply_filters(params, filters)
+        filters.each do |filter|
+          case filter
+          when Symbol, String
+            permitted_scalar_filter(params, filter)
+          when Hash then
+            hash_filter(params, filter)
+          end
+        end
+      end
+
+      def unpermitted_keys(params)
+        input.keys - params.keys
+      end
+
+    private
+
+      def array_of_permitted_scalars_filter(params, key, hash = input)
+        if hash.has_key?(key) && array_of_permitted_scalars?(hash[key])
+          params[key] = hash[key]
+        end
+      end
+
+      def each_element(value)
+        if value.is_a?(Array)
+          value.map { |el| yield el }.compact
+          # fields_for on an array of records uses numeric hash keys.
+        elsif value.is_a?(Hash) && value.keys.all? { |k| k =~ /\A-?\d+\z/ }
+          hash = value.class.new
+          value.each { |k,v| hash[k] = yield(v, k) }
+          hash
+        else
+          yield value
+        end
+      end
+
       def hash_filter(params, filter)
         filter = filter.with_indifferent_access
 
@@ -35,47 +71,6 @@ class ActionController::Parameters
             params[key] = input[key]
           end
         end
-      end
-
-      def unpermitted_parameters!(params)
-        return unless action_on_unpermitted_parameters
-
-        unpermitted_keys = unpermitted_keys(params)
-
-        if unpermitted_keys.any?
-          case action_on_unpermitted_parameters
-          when :log
-            name = "unpermitted_parameters.action_controller"
-            ActiveSupport::Notifications.instrument(name, :keys => unpermitted_keys)
-          when :raise
-            raise ActionController::UnpermittedParameters.new(unpermitted_keys)
-          end
-        end
-      end
-
-    private
-
-      def array_of_permitted_scalars_filter(params, key, hash = input)
-        if hash.has_key?(key) && array_of_permitted_scalars?(hash[key])
-          params[key] = hash[key]
-        end
-      end
-
-      def each_element(value)
-        if value.is_a?(Array)
-          value.map { |el| yield el }.compact
-          # fields_for on an array of records uses numeric hash keys.
-        elsif value.is_a?(Hash) && value.keys.all? { |k| k =~ /\A-?\d+\z/ }
-          hash = value.class.new
-          value.each { |k,v| hash[k] = yield(v, k) }
-          hash
-        else
-          yield value
-        end
-      end
-
-      def unpermitted_keys(params)
-        input.keys - params.keys - NEVER_UNPERMITTED_PARAMS
       end
   end
 end
