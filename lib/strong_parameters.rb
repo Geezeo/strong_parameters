@@ -1,6 +1,7 @@
 require 'action_controller/parameters'
 require 'action_controller/parameters/filter'
 require 'action_controller/parameters/filter/default'
+require 'action_controller/parameters/filter/transitional'
 require 'active_model/forbidden_attributes_protection'
 require 'strong_parameters/railtie'
 require 'strong_parameters/log_subscriber'

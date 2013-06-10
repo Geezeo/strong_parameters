@@ -38,10 +38,12 @@ class ActionController::Parameters::Filter
       filters.each do |filter|
         case filter
         when Symbol, String
-          permitted_scalar_filter(filter, &block)
-          skipped.delete filter.to_s
+          permitted_scalar_filter filter do |key, value, permitted|
+            yield key, value, permitted
+            skipped.delete key.to_s
+          end
         when Hash then
-          hash_filter(filter, &block)
+          hash_filter filter, &block
           skipped.subtract filter.keys.map(&:to_s)
         end
       end
@@ -116,14 +118,18 @@ class ActionController::Parameters::Filter
           array_of_permitted_scalars_filter(key, &block)
         else
           # Declaration {:user => :name} or {:user => [:name, :age, {:adress => ...}]}.
-          output[key] = each_element(value) do |element, index|
+          values = each_element(value) do |element, index|
             if element.is_a?(Hash)
               element = input.class.new(element) unless element.respond_to?(:permit)
               element.permit(*Array.wrap(filter[key]))
             elsif filter[key].is_a?(Hash) && filter[key][index] == []
               array_of_permitted_scalars_filter(index, value, &block)
+            else
+              yield key, element, false
+              nil
             end
           end
+          yield key, values, true
         end
       end
     end
