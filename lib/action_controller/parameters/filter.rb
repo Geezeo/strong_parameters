@@ -33,6 +33,25 @@ class ActionController::Parameters::Filter
 
   protected
 
+    def filter(&block)
+      skipped = Set.new input.keys
+      filters.each do |filter|
+        case filter
+        when Symbol, String
+          permitted_scalar_filter(filter, &block)
+          skipped.delete filter.to_s
+        when Hash then
+          hash_filter(filter, &block)
+          skipped.subtract filter.keys.map(&:to_s)
+        end
+      end
+      skipped.each do |key|
+        yield key, input[key], false
+      end
+    end
+
+  private
+
     # Never raise an UnpermittedParameters exception because of these params
     # are present. They are added by Rails and it's of no concern.
     NEVER_UNPERMITTED_PARAMS = %w( controller action )
@@ -66,11 +85,66 @@ class ActionController::Parameters::Filter
       end
     end
 
+    def array_of_permitted_scalars_filter(key, hash = input)
+      if hash.has_key?(key)
+        yield key, hash[key], array_of_permitted_scalars?(hash[key])
+      end
+    end
+
+    def each_element(value)
+      if value.is_a?(Array)
+        value.map { |el| yield el }.compact
+        # fields_for on an array of records uses numeric hash keys.
+      elsif value.is_a?(Hash) && value.keys.all? { |k| k =~ /\A-?\d+\z/ }
+        hash = value.class.new
+        value.each { |k,v| hash[k] = yield(v, k) }
+        hash
+      else
+        yield value
+      end
+    end
+
+    def hash_filter(filter, &block)
+      filter = filter.with_indifferent_access
+
+      # Slicing filters out non-declared keys.
+      input.slice(*filter.keys).each do |key, value|
+        return unless value
+
+        if filter[key] == []
+          # Declaration {:comment_ids => []}.
+          array_of_permitted_scalars_filter(key, &block)
+        else
+          # Declaration {:user => :name} or {:user => [:name, :age, {:adress => ...}]}.
+          output[key] = each_element(value) do |element, index|
+            if element.is_a?(Hash)
+              element = input.class.new(element) unless element.respond_to?(:permit)
+              element.permit(*Array.wrap(filter[key]))
+            elsif filter[key].is_a?(Hash) && filter[key][index] == []
+              array_of_permitted_scalars_filter(index, value, &block)
+            end
+          end
+        end
+      end
+    end
+
     def permitted_scalar?(value)
       PERMITTED_SCALAR_TYPES.any? {|type| value.is_a?(type)}
     end
 
-  private
+    def permitted_scalar_filter(key)
+      input.keys.grep(/\A#{Regexp.escape(key.to_s)}(\(\d+[if]?\))?\z/).each do |key|
+        yield key, input[key], permitted_scalar?(input[key])
+      end
+    end
+
+    def unpermitted_keys
+      [].tap do |result|
+        filter do |key, value, permitted|
+          result << key unless permitted
+        end
+      end
+    end
 
     def unpermitted_parameters!
       return unless action_on_unpermitted_parameters
