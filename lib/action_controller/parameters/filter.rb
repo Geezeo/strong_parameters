@@ -1,22 +1,16 @@
 class ActionController::Parameters::Filter
-  cattr_accessor :action_on_unpermitted_parameters, :parameter_filter
+  cattr_accessor :action_on_unpermitted_parameters,
+                 :filter_unpermitted_parameters
   attr_reader :filters, :input, :output
 
   def self.configure(config)
-    self.action_on_unpermitted_parameters = config.fetch(:action_on_unpermitted_parameters) do
+    self.action_on_unpermitted_parameters = config.delete(:action_on_unpermitted_parameters) do
       (Rails.env.test? || Rails.env.development?) ? :log : false
     end
 
-    parameter_filter_config = config.fetch :parameter_filter, :default
-    self.parameter_filter = if parameter_filter_config.respond_to? :new
-      parameter_filter_config
-    else
-      const_get parameter_filter_config.to_s.camelize
-    end
-  end
-
-  def self.for_parameters(input)
-    parameter_filter.new input
+    self.filter_unpermitted_parameters =
+        !config.has_key?(:filter_unpermitted_parameters) ||
+        config.delete(:filter_unpermitted_parameters)
   end
 
   def initialize(input)
@@ -26,7 +20,15 @@ class ActionController::Parameters::Filter
 
   def permit(*filters)
     @filters = filters
-    apply_filters
+
+    if filter_unpermitted_parameters
+      filter do |key, value, permitted|
+        output[key] = value if permitted
+      end
+    else
+      output.update input
+    end
+
     unpermitted_parameters!
     output.permit!
   end
@@ -38,13 +40,13 @@ class ActionController::Parameters::Filter
       filters.each do |filter|
         case filter
         when Symbol, String
-          permitted_scalar_filter filter do |key, value, permitted|
+          permitted_scalar_filter(filter) do |key, value, permitted|
             yield key, value, permitted
-            skipped.delete key.to_s
+            skipped.delete(key.to_s)
           end
         when Hash then
-          hash_filter filter, &block
-          skipped.subtract filter.keys.map(&:to_s)
+          hash_filter(filter, &block)
+          skipped.subtract(filter.keys.map(&:to_s))
         end
       end
       skipped.each do |key|
@@ -81,28 +83,29 @@ class ActionController::Parameters::Filter
       Rack::Test::UploadedFile,
     ]
 
+    def permitted_scalar?(value)
+      PERMITTED_SCALAR_TYPES.any? {|type| value.is_a?(type)}
+    end
+
     def array_of_permitted_scalars?(value)
       if value.is_a?(Array)
         value.all? {|element| permitted_scalar?(element)}
       end
     end
 
-    def array_of_permitted_scalars_filter(key, hash = input)
-      if hash.has_key?(key)
-        yield key, hash[key], array_of_permitted_scalars?(hash[key])
+    def permitted_scalar_filter(key)
+      if input.has_key?(key)
+        yield key, input[key], permitted_scalar?(input[key])
+      end
+
+      input.keys.grep(/\A#{Regexp.escape(key.to_s)}\(\d+[if]?\)\z/).each do |key|
+        yield key, input[key], permitted_scalar?(input[key])
       end
     end
 
-    def each_element(value)
-      if value.is_a?(Array)
-        value.map { |el| yield el }.compact
-        # fields_for on an array of records uses numeric hash keys.
-      elsif value.is_a?(Hash) && value.keys.all? { |k| k =~ /\A-?\d+\z/ }
-        hash = value.class.new
-        value.each { |k,v| hash[k] = yield(v, k) }
-        hash
-      else
-        yield value
+    def array_of_permitted_scalars_filter(key, hash = input)
+      if hash.has_key?(key)
+        yield key, hash[key], array_of_permitted_scalars?(hash[key])
       end
     end
 
@@ -134,21 +137,16 @@ class ActionController::Parameters::Filter
       end
     end
 
-    def permitted_scalar?(value)
-      PERMITTED_SCALAR_TYPES.any? {|type| value.is_a?(type)}
-    end
-
-    def permitted_scalar_filter(key)
-      input.keys.grep(/\A#{Regexp.escape(key.to_s)}(\(\d+[if]?\))?\z/).each do |key|
-        yield key, input[key], permitted_scalar?(input[key])
-      end
-    end
-
-    def unpermitted_keys
-      [].tap do |result|
-        filter do |key, value, permitted|
-          result << key unless permitted
-        end
+    def each_element(value)
+      if value.is_a?(Array)
+        value.map { |el| yield el }.compact
+        # fields_for on an array of records uses numeric hash keys.
+      elsif value.is_a?(Hash) && value.keys.all? { |k| k =~ /\A-?\d+\z/ }
+        hash = value.class.new
+        value.each { |k,v| hash[k] = yield(v, k) }
+        hash
+      else
+        yield value
       end
     end
 
@@ -164,6 +162,14 @@ class ActionController::Parameters::Filter
           ActiveSupport::Notifications.instrument(name, :keys => keys)
         when :raise
           raise ActionController::UnpermittedParameters.new(keys)
+        end
+      end
+    end
+
+    def unpermitted_keys
+      [].tap do |result|
+        filter do |key, value, permitted|
+          result << key unless permitted
         end
       end
     end

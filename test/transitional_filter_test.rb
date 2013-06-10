@@ -2,14 +2,13 @@ require 'test_helper'
 
 class TransitionalFilterTest < ActiveSupport::TestCase
   def setup
-    @old_parameter_filter = ActionController::Parameters::Filter.parameter_filter
     ActionController::Parameters::Filter.action_on_unpermitted_parameters = :log
-    ActionController::Parameters::Filter.parameter_filter = ActionController::Parameters::Filter::Transitional
+    ActionController::Parameters::Filter.filter_unpermitted_parameters = false
   end
 
   def teardown
     ActionController::Parameters::Filter.action_on_unpermitted_parameters = false
-    ActionController::Parameters::Filter.parameter_filter = @old_parameter_filter
+    ActionController::Parameters::Filter.filter_unpermitted_parameters = true
   end
 
   test 'key: unknown keys are filtered out' do
