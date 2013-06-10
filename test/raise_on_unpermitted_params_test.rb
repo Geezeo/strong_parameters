@@ -3,11 +3,11 @@ require 'action_controller/parameters'
 
 class RaiseOnUnpermittedParamsTest < ActiveSupport::TestCase
   def setup
-    ActionController::Parameters.action_on_unpermitted_parameters = :raise
+    ActionController::Parameters::Filter.action_on_unpermitted_parameters = :raise
   end
 
   def teardown
-    ActionController::Parameters.action_on_unpermitted_parameters = false
+    ActionController::Parameters::Filter.action_on_unpermitted_parameters = false
   end
 
   test "raises on unexpected params" do
