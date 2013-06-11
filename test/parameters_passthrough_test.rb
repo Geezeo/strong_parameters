@@ -3,12 +3,12 @@ require 'test_helper'
 class ParametersPassthroughTest < ActiveSupport::TestCase
   def setup
     ActionController::Parameters::Filter.action_on_unpermitted_parameters = :log
-    ActionController::Parameters::Filter.filter_unpermitted_parameters = false
+    ActionController::Parameters::Filter.unpermitted_parameters_handler = :passthrough
   end
 
   def teardown
     ActionController::Parameters::Filter.action_on_unpermitted_parameters = false
-    ActionController::Parameters::Filter.filter_unpermitted_parameters = true
+    ActionController::Parameters::Filter.unpermitted_parameters_handler = :filter
   end
 
   test 'key: unknown keys are logged but not filtered' do

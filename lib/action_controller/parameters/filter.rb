@@ -1,6 +1,6 @@
 class ActionController::Parameters::Filter
   cattr_accessor :action_on_unpermitted_parameters,
-                 :filter_unpermitted_parameters
+                 :unpermitted_parameters_handler
   attr_reader :filters, :input, :output
 
   def self.configure(config)
@@ -8,9 +8,7 @@ class ActionController::Parameters::Filter
       (Rails.env.test? || Rails.env.development?) ? :log : false
     end
 
-    self.filter_unpermitted_parameters =
-        !config.has_key?(:filter_unpermitted_parameters) ||
-        config.delete(:filter_unpermitted_parameters)
+    self.unpermitted_parameters_handler = config.delete(:unpermitted_parameters_handler)
   end
 
   def initialize(input)
@@ -21,12 +19,13 @@ class ActionController::Parameters::Filter
   def permit(*filters)
     @filters = filters
 
-    if filter_unpermitted_parameters
+    case unpermitted_parameters_handler
+    when :passthrough
+      output.update input
+    else
       filter do |key, value, permitted|
         output[key] = value if permitted
       end
-    else
-      output.update input
     end
 
     unpermitted_parameters!
