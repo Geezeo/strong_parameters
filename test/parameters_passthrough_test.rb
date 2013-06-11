@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class TransitionalFilterTest < ActiveSupport::TestCase
+class ParametersPassthroughTest < ActiveSupport::TestCase
   def setup
     ActionController::Parameters::Filter.action_on_unpermitted_parameters = :log
     ActionController::Parameters::Filter.filter_unpermitted_parameters = false
@@ -11,7 +11,7 @@ class TransitionalFilterTest < ActiveSupport::TestCase
     ActionController::Parameters::Filter.filter_unpermitted_parameters = true
   end
 
-  test 'key: unknown keys are filtered out' do
+  test 'key: unknown keys are logged but not filtered' do
     params = ActionController::Parameters.new(:id => '1234', :injected => 'injected')
     assert_logged "Unpermitted parameters: injected\n" do
       permitted = params.permit(:id)
@@ -19,13 +19,12 @@ class TransitionalFilterTest < ActiveSupport::TestCase
     end
   end
 
-  test 'key: arrays are filtered out' do
+  test 'key: arrays are logged but not filtered' do
     [[], [1], ['1']].each do |array|
       params = ActionController::Parameters.new(:id => array)
-
       assert_logged "Unpermitted parameters: id\n" do
         permitted = params.permit(:id)
-        assert_equal permitted[:id], array
+        assert_equal array, permitted[:id]
       end
 
       %w(i f).each do |suffix|
@@ -33,34 +32,32 @@ class TransitionalFilterTest < ActiveSupport::TestCase
         params = ActionController::Parameters.new(key => array)
         assert_logged "Unpermitted parameters: #{key}\n" do
           permitted = params.permit(:foo)
-          assert_equal permitted[key], array
+          assert_equal array, permitted[key]
         end
       end
     end
   end
 
-  test 'key: hashes are filtered out' do
-    [{}, {:foo => 1}, {:foo => 'bar'}].each do |hash|
+  test 'key: hashes are logged but not filtered' do
+    [{}, {'foo' => 1}, {'foo' => 'bar'}].each do |hash|
       params = ActionController::Parameters.new(:id => hash)
-
       assert_logged "Unpermitted parameters: id\n" do
         permitted = params.permit(:id)
-        assert_equal hash.with_indifferent_access, permitted[:id]
+        assert_equal hash, permitted[:id]
       end
 
       %w(i f).each do |suffix|
         key = "foo(000#{suffix})"
         params = ActionController::Parameters.new(key => hash)
-
         assert_logged "Unpermitted parameters: #{key}\n" do
           permitted = params.permit(:foo)
-          assert_equal hash.with_indifferent_access, permitted[key]
+          assert_equal hash, permitted[key]
         end
       end
     end
   end
 
-  test 'key: non-permitted scalar values are filtered out' do
+  test 'key: non-permitted scalar values are logged but not filtered' do
     value = Object.new
     params = ActionController::Parameters.new(:id => value)
     assert_logged "Unpermitted parameters: id\n" do
@@ -78,7 +75,7 @@ class TransitionalFilterTest < ActiveSupport::TestCase
     end
   end
 
-  test 'key to empty array: permitted scalar values do not pass' do
+  test 'key to empty array: permitted scalar values are logged' do
     ['foo', 1].each do |permitted_scalar|
       params = ActionController::Parameters.new(:id => permitted_scalar)
       assert_logged "Unpermitted parameters: id\n" do
@@ -88,7 +85,7 @@ class TransitionalFilterTest < ActiveSupport::TestCase
     end
   end
 
-  test 'key to empty array: arrays of non-permitted scalar do not pass' do
+  test 'key to empty array: arrays of non-permitted scalar are logged' do
     [[Object.new], [[]], [[1]], [{}], [{'id' => '1'}]].each do |non_permitted_scalar|
       params = ActionController::Parameters.new(:id => non_permitted_scalar)
       assert_logged "Unpermitted parameters: id\n" do
@@ -172,7 +169,9 @@ class TransitionalFilterTest < ActiveSupport::TestCase
     params = ActionController::Parameters.new({
       :book => {
         :authors_attributes => {
-          :'0' => { :name => %w(injected names)}
+          :'0' => { :name => 'William Shakespeare', :age_of_death => '52' },
+          :'1' => { :name => 'Unattributed Assistant' },
+          :'2' => { :name => %w(injected names)}
         }
       }
     })
@@ -181,7 +180,7 @@ class TransitionalFilterTest < ActiveSupport::TestCase
       permitted = params.permit :book => { :authors_attributes => [ :name ] }
 
       assert_equal({'name' => %w(injected names)},
-          permitted[:book][:authors_attributes]['0'])
+          permitted[:book][:authors_attributes]['2'])
     end
   end
 
@@ -190,6 +189,7 @@ class TransitionalFilterTest < ActiveSupport::TestCase
       :book => {
         :authors_attributes => {
           :'-1' => { :name => 'William Shakespeare', :age_of_death => '52' },
+          :'-2' => { :name => 'Unattributed Assistant' }
         }
       }
     })
@@ -197,27 +197,6 @@ class TransitionalFilterTest < ActiveSupport::TestCase
     assert_logged "Unpermitted parameters: age_of_death\n" do
       permitted = params.permit :book => { :authors_attributes => [:name] }
       assert_equal '52', permitted[:book][:authors_attributes]['-1'][:age_of_death]
-    end
-  end
-
-  private
-
-  def assert_filtered_out(params, key)
-    assert !params.has_key?(key), "key #{key.inspect} has not been filtered out"
-  end
-
-  def assert_logged(message)
-    old_logger = ActionController::Base.logger
-    log = StringIO.new
-    ActionController::Base.logger = Logger.new(log)
-
-    begin
-      yield
-
-      log.rewind
-      assert_match message, log.read
-    ensure
-      ActionController::Base.logger = old_logger
     end
   end
 end
