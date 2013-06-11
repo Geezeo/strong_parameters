@@ -18,6 +18,17 @@ class ActionControllerRequiredParamsTest < ActionController::TestCase
     assert_response :bad_request
   end
 
+  test "missing required parameters can log a message" do
+    begin
+      ActionController::Parameters.action_on_missing_parameter = :log
+      assert_logged "Missing parameter: name\n" do
+        post :create, { :book => { :title => "Mjallo!" } }
+      end
+    ensure
+      ActionController::Parameters.action_on_missing_parameter = :raise
+    end
+  end
+
   test "required parameters that are present will not raise" do
     post :create, { :book => { :name => "Mjallo!" } }
     assert_response :ok

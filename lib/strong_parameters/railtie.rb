@@ -13,6 +13,7 @@ module StrongParameters
     end
 
     initializer "strong_parameters.config", :before => "action_controller.set_configs" do |app|
+      ActionController::Parameters.configure app.config.action_controller
       ActionController::Parameters::Filter.configure app.config.action_controller
       ActiveModel::ForbiddenAttributesProtection.configure app.config.active_model
     end

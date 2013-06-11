@@ -46,6 +46,8 @@ class ActiveSupport::TestCase
   end
 end
 
+# ActionController::Parameters.configure(
+#     action_on_missing_parameter: :log)
 ActionController::Parameters::Filter.configure(
     action_on_unpermitted_parameters: false)
 

@@ -27,10 +27,16 @@ module ActionController
   end
 
   class Parameters < ActiveSupport::HashWithIndifferentAccess
+    cattr_accessor :action_on_missing_parameter
     attr_accessor :permitted
     alias :permitted? :permitted
 
     delegate :permit, to: :filter
+
+    def self.configure(config)
+      self.action_on_missing_parameter =
+          config.delete(:action_on_missing_parameter)
+    end
 
     def initialize(attributes = nil)
       super(attributes)
@@ -48,7 +54,17 @@ module ActionController
     end
 
     def require(key)
-      self[key].presence || raise(ActionController::ParameterMissing.new(key))
+      self[key].tap do |value|
+        if value.blank?
+          case action_on_missing_parameter
+          when :log
+            name = "missing_parameter.action_controller"
+            ActiveSupport::Notifications.instrument name, key: key
+          else
+            raise ActionController::ParameterMissing.new(key)
+          end
+        end
+      end
     end
 
     alias :required :require
