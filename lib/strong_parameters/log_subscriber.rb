@@ -1,5 +1,9 @@
 module StrongParameters
   class LogSubscriber < ActiveSupport::LogSubscriber
+    def forbidden_attributes(event)
+      debug("Forbidden attributes")
+    end
+
     def unpermitted_parameters(event)
       unpermitted_keys = event.payload[:keys]
       debug("Unpermitted parameters: #{unpermitted_keys.join(", ")}")
@@ -12,3 +16,4 @@ module StrongParameters
 end
 
 StrongParameters::LogSubscriber.attach_to :action_controller
+StrongParameters::LogSubscriber.attach_to :active_model
